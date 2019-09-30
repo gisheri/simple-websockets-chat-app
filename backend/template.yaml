@@ -7,7 +7,7 @@ Description: >
   functions needed to demonstrate the Websocket protocol on API Gateway.
 
 Parameters:
-  TableName:
+  ConnectionTable:
     Type: String
     Default: 'simplechat_connections'
     Description: (Required) The name of the new DynamoDB to store connection identifiers for each connected clients. Minimum 3 characters
@@ -16,13 +16,23 @@ Parameters:
     AllowedPattern: ^[A-Za-z_]+$
     ConstraintDescription: 'Required. Can be characters and underscore only. No numbers or special characters allowed.'
 
+  MessagesTable:
+    Type: String
+    Default: 'simplechat_messages'
+    Description: (Required) The name of the new DynamoDB to store messages. Minimum 3 characters
+    MinLength: 
+    MaxLength: 50
+    AllowedPattern: ^*+$
+    ConstraintDescription: 'Required. Can be any character'
+
 Resources:
   SimpleChatWebSocket:
     Type: AWS::ApiGatewayV2::Api
     Properties:
       Name: SimpleChatWebSocket
       ProtocolType: WEBSOCKET
-      RouteSelectionExpression: "$request.body.message"
+      RouteSelectionExpression: "$request.body.action"
+
   ConnectRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -34,6 +44,7 @@ Resources:
         - '/'
         - - 'integrations'
           - !Ref ConnectInteg
+
   ConnectInteg:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -43,6 +54,7 @@ Resources:
       IntegrationUri: 
         Fn::Sub:
             arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectFunction.Arn}/invocations
+
   DisconnectRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -54,6 +66,7 @@ Resources:
         - '/'
         - - 'integrations'
           - !Ref DisconnectInteg
+
   DisconnectInteg:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -63,6 +76,7 @@ Resources:
       IntegrationUri: 
         Fn::Sub:
             arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations
+
   SendRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -74,23 +88,49 @@ Resources:
         - '/'
         - - 'integrations'
           - !Ref SendInteg
+
   SendInteg:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref SimpleChatWebSocket
-      Description: Send Integration
+      Description: Send Integration Invokes the SendMessage Lambda Function
       IntegrationType: AWS_PROXY
       IntegrationUri: 
         Fn::Sub:
             arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SendMessageFunction.Arn}/invocations
+
+  GetRecentRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SimpleChatWebSocket
+      RouteKey: getrecentmessages
+      AuthorizationType: NONE
+      OperationName: GetRecentRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref GetRecentInteg
+
+  GetRecentInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SimpleChatWebSocket
+      Description: Get Recent Messages Integration Invokes the GetRecentMessages Lambda Function
+      IntegrationType: AWS_PROXY
+      IntegrationUri: 
+        Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetRecentMessagesFunction.Arn}/invocations
+
   Deployment:
     Type: AWS::ApiGatewayV2::Deployment
     DependsOn:
     - ConnectRoute
     - SendRoute
+    - GetRecentRoute
     - DisconnectRoute
     Properties:
       ApiId: !Ref SimpleChatWebSocket
+
   Stage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
@@ -98,11 +138,14 @@ Resources:
       Description: Prod Stage
       DeploymentId: !Ref Deployment
       ApiId: !Ref SimpleChatWebSocket
+
   ConnectionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
       - AttributeName: "connectionId"
+        AttributeType: "S"
+      - AttributeName: "username"
         AttributeType: "S"
       KeySchema:
       - AttributeName: "connectionId"
@@ -112,7 +155,28 @@ Resources:
         WriteCapacityUnits: 5
       SSESpecification:
         SSEEnabled: True
-      TableName: !Ref TableName
+      TableName: !Ref ConnectionTable
+
+  MessagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: "messageId"
+        AttributeType: "S"
+      - AttributeName: "connectionId"
+        AttributeType: "S"
+      - AttributeName: "message"
+        AttributeType: "S"
+      KeySchema:
+      - AttributeName: "messageId"
+        KeyType: "HASH"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      SSESpecification:
+        SSEEnabled: True
+      TableName: !Ref MessagesTable
+
   OnConnectFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -122,10 +186,11 @@ Resources:
       Runtime: nodejs10.x
       Environment:
         Variables:
-          TABLE_NAME: !Ref TableName
+          CONNECTION_TABLE: !Ref ConnectionTable
       Policies:
       - DynamoDBCrudPolicy:
-          TableName: !Ref TableName
+          TableName: !Ref ConnectionTable
+
   OnConnectPermission:
     Type: AWS::Lambda::Permission
     DependsOn:
@@ -135,6 +200,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref OnConnectFunction
       Principal: apigateway.amazonaws.com
+
   OnDisconnectFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -148,6 +214,7 @@ Resources:
       Policies:
       - DynamoDBCrudPolicy:
           TableName: !Ref TableName
+
   OnDisconnectPermission:
     Type: AWS::Lambda::Permission
     DependsOn:
@@ -157,6 +224,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref OnDisconnectFunction
       Principal: apigateway.amazonaws.com
+
   SendMessageFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -166,16 +234,19 @@ Resources:
       Runtime: nodejs10.x
       Environment:
         Variables:
-          TABLE_NAME: !Ref TableName
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+          MESSAGES_TABLE: !Ref MessagesTable
       Policies:
       - DynamoDBCrudPolicy:
-          TableName: !Ref TableName
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+          MESSAGES_TABLE: !Ref MessagesTable
       - Statement:
         - Effect: Allow
           Action:
           - 'execute-api:ManageConnections'
           Resource:
           - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SimpleChatWebSocket}/*'
+
   SendMessagePermission:
     Type: AWS::Lambda::Permission
     DependsOn:
@@ -185,6 +256,40 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref SendMessageFunction
       Principal: apigateway.amazonaws.com
+  
+
+  GetRecentMessagesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: getrecent/
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs10.x
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+          MESSAGES_TABLE: !Ref MessagesTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+          MESSAGES_TABLE: !Ref MessagesTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - 'execute-api:ManageConnections'
+          Resource:
+          - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SimpleChatWebSocket}/*'
+
+  GetRecentMessagesPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - SimpleChatWebSocket
+      - GetRecentMessagesFunction
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GetRecentMessagesFunction
+      Principal: apigateway.amazonaws.com
+
 
 Outputs:
   ConnectionsTableArn:
@@ -202,6 +307,10 @@ Outputs:
   SendMessageFunctionArn:
     Description: "SendMessage function ARN"
     Value: !GetAtt SendMessageFunction.Arn
+  
+  GetRecentMessagesFunctionArn:
+    Description: "Get Recent Messages function ARN"
+    Value: !GetAtt GetRecentMessagesFunction.Arn
 
   WebSocketURI:
     Description: "The WSS Protocol URI to connect to"

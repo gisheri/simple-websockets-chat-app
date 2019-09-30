@@ -1,0 +1,12 @@
+{
+    "name": "get-recent-messages",
+    "version": "1.0.0",
+    "description": "Get Recent Messages with WebSockets on API Gateway",
+    "main": "src/app.js",
+    "author": "SAM CLI",
+    "license": "MIT",
+    "dependencies": {
+      "aws-sdk": "^2.434.0"
+    }
+  }
+  
