@@ -4,7 +4,7 @@ import './App.css';
 import Sockette from "sockette"
 import UsernameGenerator from "username-generator"
 import styled from "styled-components"
-import produce from "immer"
+// import produce from "immer"
 import { useImmer } from "use-immer";
 
 const UserBlock = styled.div`
@@ -48,11 +48,12 @@ const generateUsername = ()=>{
 }
 
 const openSocket = (options)=>{
-  return new Sockette('wss://a13iip6nq1.execute-api.us-east-1.amazonaws.com/Prod', options);
+  return new Sockette('wss://ony69stm1j.execute-api.us-east-1.amazonaws.com/Prod', options);
 }
 
 function App() {
   let socket = useRef(null);
+  let connectionId = useRef(null);
   let [users, setUsers] = useImmer({});
   let [username, setUsername] = useState(generateUsername());
   let [messages, setMessages] = useState([]);
@@ -64,7 +65,10 @@ function App() {
       maxAttempts: 10,
       onopen: e => {
         console.log('Connected!', e);
-        socket.current.json({message: 'sendmessage', data: JSON.stringify({action: "message", data: "hello world", user: username})});
+        socket.current.json({
+          action: 'sendmessage',
+          data: JSON.stringify({text: "hello world", connectionId: connectionId})
+        });
         // startInterval();
       },
       onmessage: handleMessage,
@@ -75,76 +79,65 @@ function App() {
     })
   }, []);
 
-  const startInterval = () => {
-    setInterval( ()=>{
-      setCurrentText((text)=>{
-        if(text && text.length){
-          socket.current.json({message: 'sendmessage', data: JSON.stringify({action: "message", data: text, user: username})});
-
-          return "";
-        } else {
-          return text;
-        }
-      });
-    }, 400)
+  const handleMessage = (e)=>{
+    let body = JSON.parse(e.data);
+    let { text, connectionId } = body.data;
+    switch(text){
+      case "[X]":
+          deleteText(connectionId);
+          break;
+      case "leave":
+          deleteUser(connectionId);
+          break;
+      default:
+          addText(connectionId, text)
+          break;
+    }
   }
 
-  const addText = (username, text) => {
+  const addText = (connectionId, text) => {
     setUsers((users)=>{
-      if(!users[username]){
-        users[username] = [text];
+      if(!users[connectionId]){
+        users[connectionId] = [text];
       } else {
-        users[username].push(text);
+        users[connectionId].push(text);
       }
       return users;
     });
   }
 
-  const deleteText = (username) => {
+  const deleteText = (connectionId) => {
     setUsers((users)=>{
-      if(users[username]){
-          users[username].pop()
+      if(users[connectionId]){
+          users[connectionId].pop()
       } 
       return users;
     });
     
   }
 
-  const deleteUser = (username) => {
+  const deleteUser = (connectionId) => {
     setUsers((users)=>{
-      if(users[username]){
-        delete users[username]
+      if(users[connectionId]){
+        delete users[connectionId]
       }
       return users;
     });
   }
 
-  const handleMessage = (e)=>{
-    let body = JSON.parse(e.data);
-    switch(body.action){
-      case "message":
-          addText(body.user, body.data)
-          break;
-      case "delete":
-          deleteText(body.user);
-          break;
-      case "leave":
-          deleteUser(body.user);
-          break;
-    }
-  }
+  
   
   let onKeyUp = (e) => {
     let isBackspace = e.key === "Backspace" || e.keyCode === 8;
     if(isBackspace && !e.target.value){
-      socket.current.json({message: 'sendmessage', data: JSON.stringify({action: "delete", data: null, user: username})});
+      socket.current.json({action: 'sendmessage', data: JSON.stringify({text: "[X]", connectionId: connectionId})});
     }
   }
 
   let onChange = (e)=>{
     let value = e.target.value;
     setCurrentText("");
-    socket.current.json({message: 'sendmessage', data: JSON.stringify({action: "message", data: value, user: username})});
+    socket.current.json({action: 'sendmessage', data: JSON.stringify({text: value, connectionId: connectionId})});
   }
   
   console.log('rerendering')
@@ -152,16 +145,16 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h3>Welcome <strong>{username}</strong></h3>
+        <h3>Welcome <strong>{connectionId}</strong></h3>
       </header>
       <div>
         {
-          Object.entries(users).map(([user, messages], i) => {
+          Object.entries(users).map(([m_connectionId, messages], i) => {
             return <UserBlock key={i}>
-              <h4>{user}:</h4>
+              <h4>{connectionId}:</h4>
               <Inputs>
                 <PrevInput>{messages.join("")}</PrevInput>
-                {user === username && 
+                {m_connectionId === connectionId && 
                   <NextInput type="text" value={currentText || ""} onKeyUp={onKeyUp} onChange={onChange}/>
                 }
               </Inputs>

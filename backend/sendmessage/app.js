@@ -1,14 +1,14 @@
 const AWS = require('aws-sdk');
-
-const ddb = new AWS.DynamoDB.DocumentClient({ apiVersion: '2012-08-10' });
-
+const DocumentClient = new AWS.DynamoDB.DocumentClient({ apiVersion: '2012-08-10' });
+const Dynamo = new AWS.DynamoDB({ apiVersion: "2012-10-08" })
 const { CONNECTIONS_TABLE, MESSAGES_TABLE } = process.env;
 
 exports.handler = async (event, context) => {
   let connectionData;
-  
+  let connectionId = event.requestContext.connectionId;
+
   try {
-    connectionData = await ddb.scan({ TableName: CONNECTIONS_TABLE, ProjectionExpression: 'connectionId' }).promise();
+    connectionData = await DocumentClient.scan({ TableName: CONNECTIONS_TABLE, ProjectionExpression: 'connectionId' }).promise();
   } catch (e) {
     return { statusCode: 500, body: e.stack };
   }
@@ -17,18 +17,17 @@ exports.handler = async (event, context) => {
     apiVersion: '2018-11-29',
     endpoint: event.requestContext.domainName + '/' + event.requestContext.stage
   });
-  let rand = Match.ceil(Math.random() * 9999)
+  let rand = Math.ceil(Math.random() * 9999)
   let messageId = event.requestContext.connectionId+rand;
-  const message = {connectionId: connectionId, message: JSON.parse(event.body).data};
+  const message = {connectionId: connectionId, data: JSON.parse(event.body).data};
   
   //save the item in the messages table
   try {
-    await ddb.putItem({
-      TableName: process.env.MESSAGES_TABLE,
+    await Dynamo.putItem({
+      TableName: MESSAGES_TABLE,
       Item: {
         messageId: {S: messageId},
         connectionId: { S: connectionId },
-        message: { S: username }
       }
     });
   } catch(e){

@@ -16,13 +16,13 @@ Parameters:
     AllowedPattern: ^[A-Za-z_]+$
     ConstraintDescription: 'Required. Can be characters and underscore only. No numbers or special characters allowed.'
 
-  MessagesTable:
+  MessageTable:
     Type: String
     Default: 'simplechat_messages'
     Description: (Required) The name of the new DynamoDB to store messages. Minimum 3 characters
-    MinLength: 
+    MinLength: 1
     MaxLength: 50
-    AllowedPattern: ^*+$
+    AllowedPattern: ^[A-Za-z_]+$
     ConstraintDescription: 'Required. Can be any character'
 
 Resources:
@@ -145,8 +145,6 @@ Resources:
       AttributeDefinitions:
       - AttributeName: "connectionId"
         AttributeType: "S"
-      - AttributeName: "username"
-        AttributeType: "S"
       KeySchema:
       - AttributeName: "connectionId"
         KeyType: "HASH"
@@ -161,32 +159,32 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
-      - AttributeName: "messageId"
-        AttributeType: "S"
       - AttributeName: "connectionId"
         AttributeType: "S"
-      - AttributeName: "message"
+      - AttributeName: "messageId"
         AttributeType: "S"
       KeySchema:
-      - AttributeName: "messageId"
+      - AttributeName: "connectionId"
         KeyType: "HASH"
+      - AttributeName: "messageId"
+        KeyType: "RANGE"
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
       SSESpecification:
         SSEEnabled: True
-      TableName: !Ref MessagesTable
+      TableName: !Ref MessageTable
 
   OnConnectFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: onconnect/
+      CodeUri: onConnect/
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs10.x
       Environment:
         Variables:
-          CONNECTION_TABLE: !Ref ConnectionTable
+          CONNECTIONS_TABLE: !Ref ConnectionTable
       Policies:
       - DynamoDBCrudPolicy:
           TableName: !Ref ConnectionTable
@@ -204,16 +202,19 @@ Resources:
   OnDisconnectFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: ondisconnect/
+      CodeUri: onDisconnect/
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs10.x
       Environment:
         Variables:
-          TABLE_NAME: !Ref TableName
+          CONNECTIONS_TABLE: !Ref ConnectionTable
+          MESSAGES_TABLE: !Ref ConnectionTable
       Policies:
       - DynamoDBCrudPolicy:
-          TableName: !Ref TableName
+          TableName: !Ref ConnectionTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref MessageTable
 
   OnDisconnectPermission:
     Type: AWS::Lambda::Permission
@@ -228,18 +229,19 @@ Resources:
   SendMessageFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: sendmessage/
+      CodeUri: sendMessage/
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs10.x
       Environment:
         Variables:
-          CONNECTIONS_TABLE: !Ref ConnectionsTable
-          MESSAGES_TABLE: !Ref MessagesTable
+          CONNECTIONS_TABLE: !Ref ConnectionTable
+          MESSAGES_TABLE: !Ref MessageTable
       Policies:
       - DynamoDBCrudPolicy:
-          CONNECTIONS_TABLE: !Ref ConnectionsTable
-          MESSAGES_TABLE: !Ref MessagesTable
+          TableName: !Ref ConnectionTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref MessageTable
       - Statement:
         - Effect: Allow
           Action:
@@ -261,18 +263,19 @@ Resources:
   GetRecentMessagesFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: getrecent/
+      CodeUri: getRecentMessages/
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs10.x
       Environment:
         Variables:
-          CONNECTIONS_TABLE: !Ref ConnectionsTable
-          MESSAGES_TABLE: !Ref MessagesTable
+          CONNECTIONS_TABLE: !Ref ConnectionTable
+          MESSAGES_TABLE: !Ref MessageTable
       Policies:
       - DynamoDBCrudPolicy:
-          CONNECTIONS_TABLE: !Ref ConnectionsTable
-          MESSAGES_TABLE: !Ref MessagesTable
+          TableName: !Ref ConnectionTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref MessageTable
       - Statement:
         - Effect: Allow
           Action:
@@ -295,6 +298,10 @@ Outputs:
   ConnectionsTableArn:
     Description: "Connections table ARN"
     Value: !GetAtt ConnectionsTable.Arn
+  
+  MessagesTableArn:
+    Description: "Messages table ARN"
+    Value: !GetAtt MessagesTable.Arn
 
   OnConnectFunctionArn:
     Description: "OnConnect function ARN"

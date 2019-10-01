@@ -98,6 +98,9 @@ exports.handler = async function (event, context, callback) {
     let connectionId = event.requestContext.connectionId
     let connectionDeletion = await deleteConnection(connectionId);
     let messagesDeletion = await deleteMessages(connectionId);
-    resolve({status: "success", "message":"Disconnected, and deleted all messages"});
+    resolve({
+      statusCode: 200,
+      body: JSON.stringify({status:"disconnected", connectionId: connectionId})
+    })
  });
 };

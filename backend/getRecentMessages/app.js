@@ -20,8 +20,14 @@ exports.handler = async function(event, contex){
             return {
                 messageId: message.messageId.S,
                 connectionId: message.connectionId.S,
+                message: message.message.S,
             }
         });
-        resolve({status: "success", "messages":messages});
+        resolve ({
+            statusCode: err ? 500 : 200,
+            body: err 
+              ? JSON.stringify({status: "failed", "message": "Failed to connect: " + JSON.stringify(err) } )
+              : JSON.stringify({status: "success", "messages":messages})
+        })
     });
 }
