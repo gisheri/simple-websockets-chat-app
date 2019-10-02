@@ -53,7 +53,7 @@ const openSocket = (options)=>{
 
 function App() {
   let socket = useRef(null);
-  let connectionId = useRef(null);
+  let [connectionId, setConnectionId] = useState(null);
   let [users, setUsers] = useImmer({});
   let [username, setUsername] = useState(generateUsername());
   let [messages, setMessages] = useState([]);
@@ -65,10 +65,10 @@ function App() {
       maxAttempts: 10,
       onopen: e => {
         console.log('Connected!', e);
-        socket.current.json({
-          action: 'sendmessage',
-          data: JSON.stringify({text: "hello world", connectionId: connectionId})
-        });
+        // socket.current.json({
+        //   action: 'sendmessage',
+        //   data: JSON.stringify({text: "hello world", connectionId: connectionId})
+        // });
         // startInterval();
       },
       onmessage: handleMessage,
@@ -82,17 +82,16 @@ function App() {
   const handleMessage = (e)=>{
     let body = JSON.parse(e.data);
     let { text, connectionId } = body.data;
-    switch(text){
-      case "[X]":
-          deleteText(connectionId);
-          break;
-      case "leave":
-          deleteUser(connectionId);
-          break;
-      default:
-          addText(connectionId, text)
-          break;
-    }
+    let action = {
+      "[welcome]": startSession,
+      "[delete]" : deleteText,
+      "[leave]" : deleteUser,
+    }[text] || addText
+    return action(connectionId, text);
+  }
+
+  const startSession = (connectionId) => {
+    setConnectionId(connectionId);
   }
 
   const addText = (connectionId, text) => {
@@ -130,7 +129,7 @@ function App() {
   let onKeyUp = (e) => {
     let isBackspace = e.key === "Backspace" || e.keyCode === 8;
     if(isBackspace && !e.target.value){
-      socket.current.json({action: 'sendmessage', data: JSON.stringify({text: "[X]", connectionId: connectionId})});
+      socket.current.json({action: 'sendmessage', data: JSON.stringify({text: "[delete]", connectionId: connectionId})});
     }
   }
 

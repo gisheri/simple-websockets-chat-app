@@ -188,6 +188,12 @@ Resources:
       Policies:
       - DynamoDBCrudPolicy:
           TableName: !Ref ConnectionTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - 'execute-api:ManageConnections'
+          Resource:
+          - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SimpleChatWebSocket}/*'
 
   OnConnectPermission:
     Type: AWS::Lambda::Permission
@@ -215,6 +221,12 @@ Resources:
           TableName: !Ref ConnectionTable
       - DynamoDBCrudPolicy:
           TableName: !Ref MessageTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - 'execute-api:ManageConnections'
+          Resource:
+          - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SimpleChatWebSocket}/*'
 
   OnDisconnectPermission:
     Type: AWS::Lambda::Permission
