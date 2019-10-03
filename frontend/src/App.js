@@ -65,11 +65,10 @@ function App() {
       maxAttempts: 10,
       onopen: e => {
         console.log('Connected!', e);
-        // socket.current.json({
-        //   action: 'sendmessage',
-        //   data: JSON.stringify({text: "hello world", connectionId: connectionId})
-        // });
-        // startInterval();
+        socket.current.json({
+          action: 'sendmessage',
+          text: "hello world",
+        });
       },
       onmessage: handleMessage,
       onreconnect: e => console.log('Reconnecting...', e),
@@ -80,14 +79,17 @@ function App() {
   }, []);
 
   const handleMessage = (e)=>{
-    let body = JSON.parse(e.data);
-    let { text, connectionId } = body.data;
+    let {text,  connectionId: messageConnectionId } =  JSON.parse(e.data);
+    console.log(connectionId, messageConnectionId);
+    setConnectionId(connectionId=>{
+      return connectionId || messageConnectionId 
+    });
     let action = {
       "[welcome]": startSession,
       "[delete]" : deleteText,
       "[leave]" : deleteUser,
     }[text] || addText
-    return action(connectionId, text);
+    return action(messageConnectionId, text);
   }
 
   const startSession = (connectionId) => {
@@ -129,18 +131,16 @@ function App() {
   let onKeyUp = (e) => {
     let isBackspace = e.key === "Backspace" || e.keyCode === 8;
     if(isBackspace && !e.target.value){
-      socket.current.json({action: 'sendmessage', data: JSON.stringify({text: "[delete]", connectionId: connectionId})});
+      socket.current.json({action: 'sendmessage', text: "[delete]"});
     }
   }
 
   let onChange = (e)=>{
     let value = e.target.value;
     setCurrentText("");
-    socket.current.json({action: 'sendmessage', data: JSON.stringify({text: value, connectionId: connectionId})});
+    socket.current.json({action: 'sendmessage', text: value});
   }
   
-  console.log('rerendering')
-  console.log(users);
   return (
     <div className="App">
       <header className="App-header">
@@ -148,12 +148,12 @@ function App() {
       </header>
       <div>
         {
-          Object.entries(users).map(([m_connectionId, messages], i) => {
+          Object.entries(users).map(([userConnectionId, messages], i) => {
             return <UserBlock key={i}>
               <h4>{connectionId}:</h4>
               <Inputs>
                 <PrevInput>{messages.join("")}</PrevInput>
-                {m_connectionId === connectionId && 
+                {userConnectionId === connectionId && 
                   <NextInput type="text" value={currentText || ""} onKeyUp={onKeyUp} onChange={onChange}/>
                 }
               </Inputs>

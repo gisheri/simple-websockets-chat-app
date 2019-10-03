@@ -29,9 +29,10 @@ exports.handler = async function (event) {
 
   let connectionId = event.requestContext.connectionId;
   let username = "user_"+(Math.floor(Math.random() * 99999)+1);
+  console.log(connectionId);
   try {
     await saveConnection(connectionId, username);
-    await apigwManagementApi.postToConnection({ ConnectionId: connectionId, Data: JSON.stringify({text: "[welcome]", connectionId: connectionId}) }).promise();
+    // await apigwManagementApi.postToConnection({ ConnectionId: connectionId, Data: JSON.stringify({text: "[welcome]", connectionId: connectionId}) }).promise();
   } catch(err){
     if(err.statusCode == 410){
       //ignore

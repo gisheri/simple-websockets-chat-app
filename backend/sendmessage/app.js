@@ -19,7 +19,7 @@ exports.handler = async (event, context) => {
   });
   let rand = Math.ceil(Math.random() * 9999)
   let messageId = event.requestContext.connectionId+rand;
-  const message = {connectionId: connectionId, data: JSON.parse(event.body).data};
+  const text = JSON.parse(event.body).text;
   
   //save the item in the messages table
   try {
@@ -28,6 +28,7 @@ exports.handler = async (event, context) => {
       Item: {
         messageId: {S: messageId},
         connectionId: { S: connectionId },
+        message: text,
       }
     });
   } catch(e){
@@ -36,7 +37,7 @@ exports.handler = async (event, context) => {
 
   const postCalls = connectionData.Items.map(async ({ connectionId }) => {
     try {
-      await apigwManagementApi.postToConnection({ ConnectionId: connectionId, Data: JSON.stringify(message) }).promise();
+      await apigwManagementApi.postToConnection({ ConnectionId: connectionId, Data: JSON.stringify({connectionId: connectionId, text: text}) }).promise();
     } catch (e) {
       if (e.statusCode === 410) {
         console.log(`Found stale connection, deleting ${connectionId}`);
