@@ -1,4 +1,4 @@
-const AWS = require("aws")
+const AWS = require("aws-sdk")
 AWS.config.update({ region: process.env.AWS_REGION });
 var DDB = new AWS.DynamoDB({ apiVersion: "2012-10-08" });
 
@@ -8,7 +8,7 @@ exports.handler = async function(event, contex){
     try {
         messages = await ddb.query({
             TableName: process.env.MESSAGES_TABLE,
-            limit: limit,
+            Limit: limit,
         }).promise();
     } catch (e) {
         return { statusCode: 500, body: JSON.stringify({status: "failed", "message":`Failed to retrieve messages ${e.message()}` }) };

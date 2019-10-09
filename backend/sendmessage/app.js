@@ -4,22 +4,16 @@ const Dynamo = new AWS.DynamoDB({ apiVersion: "2012-10-08" })
 const { CONNECTIONS_TABLE, MESSAGES_TABLE } = process.env;
 
 exports.handler = async (event, context) => {
-  let connectionData;
-  let connectionId = event.requestContext.connectionId;
+  let myConnectionId = event.requestContext.connectionId;
+  let rand = Math.ceil(Math.random() * 9999)
+  let messageId = myConnectionId+rand;
+  const text = JSON.parse(event.body).text;
 
-  try {
-    connectionData = await DocumentClient.scan({ TableName: CONNECTIONS_TABLE, ProjectionExpression: 'connectionId' }).promise();
-  } catch (e) {
-    return { statusCode: 500, body: e.stack };
-  }
-  
   const apigwManagementApi = new AWS.ApiGatewayManagementApi({
     apiVersion: '2018-11-29',
     endpoint: event.requestContext.domainName + '/' + event.requestContext.stage
   });
-  let rand = Math.ceil(Math.random() * 9999)
-  let messageId = event.requestContext.connectionId+rand;
-  const text = JSON.parse(event.body).text;
+
   
   //save the item in the messages table
   try {
@@ -27,22 +21,35 @@ exports.handler = async (event, context) => {
       TableName: MESSAGES_TABLE,
       Item: {
         messageId: {S: messageId},
-        connectionId: { S: connectionId },
+        connectionId: { S: myConnectionId },
         message: text,
       }
     });
   } catch(e){
-    throw e;
+    return { statusCode: 500, body: e.stack };
+  }
+
+  try {
+    var connectionData = await DocumentClient.query({
+      TableName: CONNECTIONS_TABLE,
+      Limit: 10,
+      ProjectionExpression: 'connectionId'
+    }).promise();
+  } catch (e) {
+    console.log(e);
+    return { statusCode: 500, body: e.stack };
   }
 
   const postCalls = connectionData.Items.map(async ({ connectionId }) => {
+    console.log(connectionId);
     try {
-      await apigwManagementApi.postToConnection({ ConnectionId: connectionId, Data: JSON.stringify({connectionId: connectionId, text: text}) }).promise();
+      await apigwManagementApi.postToConnection({ ConnectionId: connectionId, Data: JSON.stringify({connectionId: myConnectionId, text: text}) }).promise();
     } catch (e) {
       if (e.statusCode === 410) {
         console.log(`Found stale connection, deleting ${connectionId}`);
-        await ddb.delete({ TableName: CONNECTIONS_TABLE, Key: { connectionId } }).promise();
+        await Dynamo.deleteItem({ TableName: CONNECTIONS_TABLE, Key: { connectionId } }).promise();
       } else {
+        console.log(e);
         throw e;
       }
     }
@@ -51,6 +58,7 @@ exports.handler = async (event, context) => {
   try {
     await Promise.all(postCalls);
   } catch (e) {
+    console.log(e);
     return { statusCode: 500, body: e.stack };
   }
 
