@@ -1,5 +1,5 @@
 import styled from "styled-components"
-import randomColor from "randomcolor"
+import randomColor from "randomcolor" 
 
 export const Header = styled.div`
     padding:10px;

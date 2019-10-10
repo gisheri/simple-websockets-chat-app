@@ -1,15 +1,14 @@
 import React, {useEffect, useState, useRef, useReducer} from 'react';
 import {Header, Inputs, UserBlock, PrevInput, NextInput, NextInputContainer, Username} from "./StyledElements"
 import Websocket from 'react-websocket';
-import randomColor from "randomcolor"; 
 import rug from "./modules/randomUsername"
+import {throttle} from "throttle-debounce"
 const socketUri = 'wss://ony69stm1j.execute-api.us-east-1.amazonaws.com/Prod'
 const socketOptions = {};
 
 const getUsernameFromConnectionId = (connectionId) => {
   let username = rug.setSeed(connectionId).generate();
-  console.log(username, connectionId);
-  return username;
+  return username; 
 }
 
 let User = ({connectionId, messages, isCurrentUser, currentText, onChange, onKeyUp})=>{
@@ -33,6 +32,8 @@ let App = () => {
   let [users, setUsers] = useState({});
   let [currentText, setCurrentText] = useState("");
   let socket = useRef();
+  let [textTimeout, setTextTimeout] = useState(null);
+  let [useThrottle, setUseThrottle] = useState(true)
 
   const addText = (connectionId, text) => {
     let newUsers = {...users};
@@ -67,9 +68,20 @@ let App = () => {
 
   let onChange = (e)=>{
     let value = e.target.value;
-    addText(myConnectionId, value);
-    setCurrentText("");
-    sendMessage(value);
+    if(useThrottle){
+      setCurrentText(value);
+      clearTimeout(textTimeout);
+      setTextTimeout(setTimeout(()=>{
+        addText(myConnectionId, value);
+        sendMessage(value);
+        setCurrentText("");
+      }, 400));
+    } else {
+      setCurrentText("");
+      addText(myConnectionId, value);
+      sendMessage(value);
+    }
+
   }
   
   let onOpen = (e, props) => {
@@ -102,6 +114,11 @@ let App = () => {
     }
   }
 
+  let toggleThrottle = (e)=>{
+    console.log(e);
+    setUseThrottle(!useThrottle);
+  }
+
   return (
     <div>
       <Websocket 
@@ -111,7 +128,8 @@ let App = () => {
           onMessage={onMessage}
       />
       <Header className="App-header">
-        <h3>Welcome <strong>{getUsernameFromConnectionId(myConnectionId)}</strong></h3>```
+        <h3>Welcome <strong>{getUsernameFromConnectionId(myConnectionId)}</strong></h3>
+        <input type="checkbox" onChange={toggleThrottle} checked={useThrottle} /> Use Throttle
       </Header>
       <div>
         {

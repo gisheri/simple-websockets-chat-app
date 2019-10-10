@@ -4,12 +4,14 @@
   "private": true,
   "dependencies": {
     "immer": "^4.0.1",
+    "randomcolor": "^0.5.4",
     "react": "^16.10.2",
     "react-dom": "^16.10.2",
     "react-scripts": "3.2.0",
     "react-socket-io": "^0.2.5",
     "react-websocket": "^2.1.0",
     "styled-components": "^4.4.0",
+    "throttle-debounce": "^2.1.0",
     "typescript": "^3.6.3",
     "use-immer": "^0.3.4"
   },
@@ -17,7 +19,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "deploy": "aws s3 sync build/ s3://ericgish-sls-chat --acl public-read"
   },
   "eslintConfig": {
     "extends": "react-app"
